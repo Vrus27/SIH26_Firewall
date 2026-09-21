@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Privacy Firewall</title>
+  <style>
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+    }
+    .title {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .switch-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1e293b;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .status-text {
+      font-size: 12px;
+      font-weight: 600;
+      color: #10b981;
+    }
+    .status-text.off {
+      color: #94a3b8;
+    }
+    .stats-card {
+      background: #1e293b;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #334155;
+    }
+    .stat-row:last-child {
+      border-bottom: none;
+    }
+    .btn {
+      width: 100%;
+      background: #10b981;
+      color: #022c22;
+      border: none;
+      padding: 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background: #34d399;
+    }
+    .footer {
+      text-align: center;
+      font-size: 10px;
+      color: #64748b;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">
+      <span>🛡️</span> AI Privacy Firewall
+    </div>
+    <span style="font-size: 10px; font-family: monospace; color: #38bdf8;">ISRO SIH26171</span>
+  </div>
+
+  <div class="switch-container">
+    <div>
+      <div style="font-size: 11px; color: #94a3b8;">FIREWALL STATUS</div>
+      <div id="statusLabel" class="status-text">🟢 ACTIVE (ON)</div>
+    </div>
+    <input type="checkbox" id="toggleSwitch" checked>
+  </div>
+
+  <div class="stats-card">
+    <div class="stat-row">
+      <span>Active Protection:</span>
+      <strong id="protVal" style="color: #34d399;">ON</strong>
+    </div>
+    <div class="stat-row">
+      <span>DOM Interception:</span>
+      <strong style="color: #38bdf8;">Enabled</strong>
+    </div>
+    <div class="stat-row">
+      <span>Outbound Leaks:</span>
+      <strong style="color: #10b981;">0 (Zero Leakage)</strong>
+    </div>
+  </div>
+
+  <button class="btn" id="openStudioBtn">Launch Demo Studio</button>
+
+  <div class="footer">
+    Client-side visual privacy perimeter for browser agents.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

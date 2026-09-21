@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "AI Privacy Firewall — ISRO SIH26171",
+  "version": "1.0.0",
+  "description": "On-device visual perception and zero-leakage privacy firewall for lightweight browser agents.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AI Privacy Firewall"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
