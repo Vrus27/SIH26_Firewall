@@ -10,11 +10,16 @@ import { processAiTask } from './mockAI/mockVlmAgent.js';
 import { executeBrowserAction } from './core/executor.js';
 import { INITIAL_TABS, setActiveTabId } from './core/tabs.js';
 import { getPolicyForOrigin, PRIVACY_MODES } from './core/policies.js';
+import { processVisualLayout } from './core/visualPerception.js';
+import { fuseContexts } from './core/contextFusion.js';
+import { filterContextForTask } from './core/taskRelevance.js';
 
 export default function App() {
-  // ── View State ──
+  // ── View & Overlay State ──
   const [currentView, setCurrentView] = useState('browser'); // 'browser' | 'dashboard'
   const [extensionOpen, setExtensionOpen] = useState(false);
+  const [showPerceptionOverlay, setShowPerceptionOverlay] = useState(false);
+  const [activeTaskPrompt, setActiveTaskPrompt] = useState("Find the Login button and log me in.");
 
   // ── Core Protection State ──
   const [isProtected, setIsProtected] = useState(true);
@@ -39,7 +44,7 @@ export default function App() {
     return getPolicyForOrigin(activeBrowserTab.origin);
   }, [activeBrowserTab.origin, policyVersion]);
 
-  // Real-time detection & sanitization telemetry for active tab
+  // 1. Local DOM Detection & Sanitization Profiling
   const { detections, sanitizedPayload, telemetry } = useMemo(() => {
     return profileExecution(
       (data, opts) => scanPageContext(data, opts),
@@ -55,6 +60,26 @@ export default function App() {
       }
     );
   }, [activeBrowserTab, isProtected, currentWebsitePolicy, privacyMode]);
+
+  // 2. V2 Feature: Modular Local Visual Perception
+  const visualPerceptionOutput = useMemo(() => {
+    return processVisualLayout(activeBrowserTab.data);
+  }, [activeBrowserTab.data]);
+
+  // 3. V2 Feature: Multimodal Context Fusion (DOM + Vision)
+  const fusionOutput = useMemo(() => {
+    return fuseContexts(detections, visualPerceptionOutput.regions, {
+      origin: activeBrowserTab.origin,
+      policy: currentWebsitePolicy
+    });
+  }, [detections, visualPerceptionOutput, activeBrowserTab.origin, currentWebsitePolicy]);
+
+  // 4. V2 Feature: Task-Aware Minimum Context Filtering
+  const taskFilteredContext = useMemo(() => {
+    return filterContextForTask(fusionOutput.fusedElements, activeTaskPrompt, {
+      origin: activeBrowserTab.origin
+    });
+  }, [fusionOutput.fusedElements, activeTaskPrompt, activeBrowserTab.origin]);
 
   // Switch active browser tab
   const handleSelectTab = (tabId) => {
@@ -76,6 +101,7 @@ export default function App() {
 
   // Handle AI Agent trigger command
   const handleTriggerAiTask = async (taskDescription = "Find the Login button and log me in.", options = {}) => {
+    setActiveTaskPrompt(taskDescription);
     setIsAiRunning(true);
     setLastActionExecution(null);
 
@@ -90,13 +116,19 @@ export default function App() {
         setLastActionExecution({
           executedAt: new Date().toISOString(),
           command: { action: 'BLOCKED', target: 'CROSS_TAB_EXFILTRATION' },
-          validation: { valid: false, checks: [{ label: 'Cross-tab access', passed: false, detail: response.reason }] },
+          validation: { 
+            decision: 'BLOCKED',
+            valid: false, 
+            checks: [{ name: "Tab Scope Guard", label: 'Cross-tab access blocked', passed: false, detail: response.reason }] 
+          },
           feedback: `Firewall blocked unauthorized access to Tab #${response.violatingTabId}. Reason: ${response.reason}`
         });
       } else if (response.action && response.action !== 'NONE') {
+        // Enforces dedicated AI Action Firewall before local execution
         const actionResult = executeBrowserAction(
           { action: response.action, target: response.target },
-          (res) => setLastActionExecution(res)
+          (res) => setLastActionExecution(res),
+          { tabId: activeBrowserTab.id, origin: activeBrowserTab.origin, isProtected }
         );
         setLastActionExecution(actionResult);
       }
@@ -113,7 +145,6 @@ export default function App() {
       <div className="min-h-screen bg-[#F7F8FA] flex flex-col">
         {/* Main Browser Area */}
         <main className="flex-1 max-w-6xl w-full mx-auto p-4 relative">
-          {/* Browser + Extension Popup Container */}
           <div className="relative">
             <SimulatedBrowser
               isProtected={isProtected}
@@ -123,6 +154,7 @@ export default function App() {
               pageData={activeBrowserTab.data}
               setPageData={handleUpdatePageData}
               detections={detections}
+              fusedElements={fusionOutput.fusedElements}
               showHighlights={showHighlights}
               lastActionExecution={lastActionExecution}
               onSimulateUserAction={(action) => {
@@ -137,14 +169,14 @@ export default function App() {
               onOpenSettings={() => setCurrentView('dashboard')}
               extensionOpen={extensionOpen}
               onToggleExtension={() => setExtensionOpen(!extensionOpen)}
+              showPerceptionOverlay={showPerceptionOverlay}
+              onTogglePerceptionOverlay={() => setShowPerceptionOverlay(!showPerceptionOverlay)}
             />
 
             {/* Extension Popup Overlay */}
             {extensionOpen && (
               <>
-                {/* Backdrop */}
                 <div className="fixed inset-0 z-30" onClick={() => setExtensionOpen(false)} />
-                {/* Popup positioned near extension icon */}
                 <div className="absolute right-12 top-12 z-40">
                   <FirewallExtension
                     isProtected={isProtected}
@@ -167,15 +199,25 @@ export default function App() {
             )}
           </div>
 
-          {/* AI Task Action Bar (below browser) */}
-          <div className="mt-3 bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between">
+          {/* AI Task Action Bar */}
+          <div className="mt-3 bg-white border border-gray-200 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className={`w-2.5 h-2.5 rounded-full ${isProtected ? 'bg-emerald-500' : 'bg-gray-400'}`} />
               <span className="text-xs text-gray-600">
-                AI Privacy Firewall {isProtected ? 'Active' : 'Disabled'} · {detections.length} element{detections.length !== 1 ? 's' : ''} detected
+                AI Privacy Firewall {isProtected ? 'Active' : 'Disabled'} · {detections.length} DOM items · {visualPerceptionOutput.totalRegions} visual regions
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setShowPerceptionOverlay(!showPerceptionOverlay)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
+                  showPerceptionOverlay 
+                    ? 'bg-purple-50 text-purple-700 border-purple-300' 
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                👁️ {showPerceptionOverlay ? 'Perception Overlay ON' : 'Show Local Perception'}
+              </button>
               <button 
                 onClick={() => handleTriggerAiTask("Find the Login button and log me in.")}
                 disabled={isAiRunning}
@@ -205,7 +247,7 @@ export default function App() {
           <div className="max-w-6xl mx-auto px-4 flex flex-wrap items-center justify-between gap-2">
             <span>AI Privacy Firewall · SIH 2026</span>
             <span className="text-gray-500">ISRO SIH26171 — On-Device Visual Perception for Lightweight Browser Agents</span>
-            <span>Privacy-Preserving Prototype</span>
+            <span>Version 2 Enhanced Prototype</span>
           </div>
         </footer>
       </div>
@@ -222,6 +264,10 @@ export default function App() {
       setPrivacyMode={setPrivacyMode}
       activeBrowserTab={activeBrowserTab}
       detections={detections}
+      visualRegions={visualPerceptionOutput.regions}
+      fusedElements={fusionOutput.fusedElements}
+      fusionTelemetry={fusionOutput.telemetry}
+      taskFilteredContext={taskFilteredContext}
       sanitizedPayload={sanitizedPayload}
       telemetry={telemetry}
       aiResult={aiResult}

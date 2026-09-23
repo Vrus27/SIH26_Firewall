@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Lock, RotateCw, ArrowLeft, ArrowRight, Download, FileText, 
   KeyRound, CheckCircle2, Eye, EyeOff, Settings, Shield,
-  AlertTriangle, X, ChevronDown
+  AlertTriangle, X, ChevronDown, Scan, Layers
 } from 'lucide-react';
 
 export default function SimulatedBrowser({ 
@@ -12,13 +12,16 @@ export default function SimulatedBrowser({
   onSelectTab, 
   pageData, 
   setPageData, 
-  detections, 
+  detections = [], 
+  fusedElements = [],
   showHighlights, 
   lastActionExecution, 
   onSimulateUserAction,
   onOpenSettings,
   extensionOpen,
-  onToggleExtension
+  onToggleExtension,
+  showPerceptionOverlay = false,
+  onTogglePerceptionOverlay
 }) {
   const [showPasswordText, setShowPasswordText] = useState(false);
 
@@ -28,7 +31,16 @@ export default function SimulatedBrowser({
   const isExecutingDownload = lastActionExecution &&
     lastActionExecution.command?.target === 'Download Report';
 
-  // Find detection record helper
+  // Helper to find fused element
+  const getFused = (type) => fusedElements.find(f => f.type === type);
+  const nameFused = getFused('NAME');
+  const emailFused = getFused('EMAIL');
+  const phoneFused = getFused('PHONE');
+  const passFused = getFused('PASSWORD');
+  const keyFused = getFused('API_KEY');
+  const sealFused = getFused('VISUAL_ACCOUNT_SEAL');
+
+  // Fallback detection helper
   const getDet = (type) => detections.find(d => d.type === type);
   const nameDet = getDet('NAME');
   const emailDet = getDet('EMAIL');
@@ -36,11 +48,49 @@ export default function SimulatedBrowser({
   const passDet = getDet('PASSWORD');
   const keyDet = getDet('API_KEY');
 
+  // Visual Perception overlay badge
+  const PerceptionBadge = ({ fused, defaultSource = "DOM + VISION", defaultType = "" }) => {
+    if (!showPerceptionOverlay) return null;
+    const source = fused?.source || defaultSource;
+    const action = fused?.action || "REDACT";
+    const agreement = fused?.agreement || "HIGH";
+
+    const badgeColor = 
+      source === 'VISION' ? 'bg-purple-100 text-purple-800 border-purple-300' :
+      source === 'DOM' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+      'bg-emerald-100 text-emerald-800 border-emerald-300';
+
+    const protectionColor =
+      action === 'BLOCK' ? 'bg-red-100 text-red-700 border-red-300' :
+      action === 'ALLOW' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' :
+      'bg-amber-100 text-amber-700 border-amber-300';
+
+    return (
+      <div className="flex items-center gap-1.5 text-[10px] font-mono mt-1 pt-1 border-t border-dashed border-gray-200">
+        <span className={`px-1.5 py-0.2 rounded border font-semibold ${badgeColor}`}>
+          Source: {source}
+        </span>
+        <span className={`px-1.5 py-0.2 rounded border font-semibold ${protectionColor}`}>
+          Protection: {action === 'BLOCK' ? 'BLOCKED' : action === 'ALLOW' ? 'TASK RELEVANT' : 'SANITIZED'}
+        </span>
+        <span className="text-gray-400">
+          Agreement: {agreement}
+        </span>
+      </div>
+    );
+  };
+
   // Detection highlight style
-  const highlightClass = (det) => {
-    if (!isProtected || !showHighlights || !det) return '';
-    if (det.action === 'BLOCK') return 'ring-2 ring-red-400 bg-red-50';
-    if (det.action === 'REDACT') return 'ring-2 ring-amber-400 bg-amber-50';
+  const highlightClass = (det, fused) => {
+    if (!isProtected || !showHighlights) return '';
+    if (showPerceptionOverlay) {
+      if (fused?.source === 'VISION') return 'ring-2 ring-purple-400 bg-purple-50/70';
+      if (det?.action === 'BLOCK') return 'ring-2 ring-red-400 bg-red-50/70';
+      if (det?.action === 'REDACT') return 'ring-2 ring-amber-400 bg-amber-50/70';
+    } else {
+      if (det?.action === 'BLOCK') return 'ring-2 ring-red-300 bg-red-50/40';
+      if (det?.action === 'REDACT') return 'ring-2 ring-amber-300 bg-amber-50/40';
+    }
     return '';
   };
 
@@ -95,8 +145,22 @@ export default function SimulatedBrowser({
           <Lock className="w-3 h-3 text-emerald-600 mr-1.5 shrink-0" />
           <span className="text-gray-500">https://</span>
           <span className="text-gray-800 font-medium">{activeTab.origin}</span>
-          <span className="text-gray-400">/user/profile</span>
+          <span className="text-gray-400">/portal/auth</span>
         </div>
+
+        {/* V2 Feature: Show Local Perception Toggle */}
+        <button
+          onClick={onTogglePerceptionOverlay}
+          className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer border ${
+            showPerceptionOverlay 
+              ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm' 
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+          }`}
+          title="Toggle Visual Perception & Context Fusion Overlay"
+        >
+          <Scan className="w-3.5 h-3.5" />
+          <span>{showPerceptionOverlay ? 'Perception: ON' : 'Show Perception'}</span>
+        </button>
 
         {/* Extension Icon (clickable) */}
         <button
@@ -125,9 +189,16 @@ export default function SimulatedBrowser({
           <div className="flex items-center gap-1.5 text-emerald-700">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
             <span className="font-medium">AI Privacy Protected</span>
-            <span className="text-emerald-600">— {detections.length} sensitive element{detections.length !== 1 ? 's' : ''} detected locally</span>
+            <span className="text-emerald-600">— {detections.length} sensitive items detected locally (DOM + Vision)</span>
           </div>
-          <span className="text-emerald-500 text-[10px]">Firewall Active</span>
+          <div className="flex items-center gap-2">
+            {showPerceptionOverlay && (
+              <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded font-medium border border-purple-200">
+                Visual Inspection Active
+              </span>
+            )}
+            <span className="text-emerald-500 text-[10px]">Firewall Active</span>
+          </div>
         </div>
       )}
 
@@ -162,135 +233,191 @@ export default function SimulatedBrowser({
         {/* Page Content: SecureBank Demo */}
         <div className="p-4 md:p-6">
           {/* Page Header */}
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                <Lock className="w-4 h-4 text-white" />
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center">
+                <Lock className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
                 <h1 className="text-lg font-semibold text-gray-900">SecureBank Demo</h1>
-                <p className="text-xs text-gray-500">Synthetic Test Environment — Employee Portal</p>
+                <p className="text-xs text-gray-500">Realistic Synthetic Enterprise Website — Demo Environment</p>
+              </div>
+            </div>
+
+            {/* V2 Vision-Only Case: Rendered Security Seal */}
+            <div className={`p-2.5 rounded-lg border flex items-center gap-3 transition-colors ${
+              showPerceptionOverlay 
+                ? 'bg-purple-50 border-purple-300 ring-2 ring-purple-400' 
+                : 'bg-indigo-50/70 border-indigo-200'
+            }`}>
+              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-sm">
+                🛡️
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-indigo-950 flex items-center gap-1.5">
+                  <span>ISRO CONFIDENTIAL SEAL</span>
+                  <span className="text-[10px] bg-indigo-200 text-indigo-800 px-1 rounded font-mono">
+                    ACCT-849204
+                  </span>
+                </div>
+                <div className="text-[10px] text-indigo-700">
+                  Rendered security watermark
+                </div>
+                <PerceptionBadge fused={sealFused} defaultSource="VISION" defaultType="VISUAL_ACCOUNT_SEAL" />
               </div>
             </div>
           </div>
 
-          {/* Account Summary Card */}
+          {/* Account Profile Card */}
           <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 mb-5">
-            <h2 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-gray-400" />
-              Account Profile
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-gray-400" />
+                Account Profile & Credentials
+              </h2>
+              {showPerceptionOverlay && (
+                <span className="text-[10px] text-indigo-600 font-mono">
+                  [Bounding Box & Multimodal Overlay Active]
+                </span>
+              )}
+            </div>
 
             <div className="space-y-3">
               {/* Name */}
-              <div className={`flex items-center justify-between py-1.5 px-2 rounded ${highlightClass(nameDet)}`}>
-                <label className="text-xs text-gray-500 w-24">Name</label>
-                <div className="flex items-center flex-1">
-                  <input 
-                    type="text" 
-                    value={pageData.name || ''} 
-                    onChange={(e) => setPageData({...pageData, name: e.target.value})}
-                    className="flex-1 text-sm text-gray-800 bg-transparent border-b border-gray-200 focus:border-indigo-400 focus:outline-none px-1 py-0.5"
-                  />
-                  <DetBadge det={nameDet} />
+              <div className={`py-1.5 px-2 rounded border border-transparent ${highlightClass(nameDet, nameFused)}`}>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-gray-500 w-24">Name</label>
+                  <div className="flex items-center flex-1">
+                    <input 
+                      type="text" 
+                      value={pageData.name || ''} 
+                      onChange={(e) => setPageData({...pageData, name: e.target.value})}
+                      className="flex-1 text-sm text-gray-800 bg-transparent border-b border-gray-200 focus:border-indigo-400 focus:outline-none px-1 py-0.5"
+                    />
+                    <DetBadge det={nameDet} />
+                  </div>
                 </div>
+                <PerceptionBadge fused={nameFused} defaultSource="DOM + VISION" defaultType="NAME" />
               </div>
 
               {/* Email */}
-              <div className={`flex items-center justify-between py-1.5 px-2 rounded ${highlightClass(emailDet)}`}>
-                <label className="text-xs text-gray-500 w-24">Email</label>
-                <div className="flex items-center flex-1">
-                  <input 
-                    type="email" 
-                    value={pageData.email || ''} 
-                    onChange={(e) => setPageData({...pageData, email: e.target.value})}
-                    className="flex-1 text-sm text-gray-800 bg-transparent border-b border-gray-200 focus:border-indigo-400 focus:outline-none px-1 py-0.5"
-                  />
-                  <DetBadge det={emailDet} />
+              <div className={`py-1.5 px-2 rounded border border-transparent ${highlightClass(emailDet, emailFused)}`}>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-gray-500 w-24">Email</label>
+                  <div className="flex items-center flex-1">
+                    <input 
+                      type="email" 
+                      value={pageData.email || ''} 
+                      onChange={(e) => setPageData({...pageData, email: e.target.value})}
+                      className="flex-1 text-sm text-gray-800 bg-transparent border-b border-gray-200 focus:border-indigo-400 focus:outline-none px-1 py-0.5"
+                    />
+                    <DetBadge det={emailDet} />
+                  </div>
                 </div>
+                <PerceptionBadge fused={emailFused} defaultSource="DOM + VISION" defaultType="EMAIL" />
               </div>
 
               {/* Phone */}
-              <div className={`flex items-center justify-between py-1.5 px-2 rounded ${highlightClass(phoneDet)}`}>
-                <label className="text-xs text-gray-500 w-24">Phone</label>
-                <div className="flex items-center flex-1">
-                  <input 
-                    type="tel" 
-                    value={pageData.phone || ''} 
-                    onChange={(e) => setPageData({...pageData, phone: e.target.value})}
-                    className="flex-1 text-sm text-gray-800 bg-transparent border-b border-gray-200 focus:border-indigo-400 focus:outline-none px-1 py-0.5"
-                  />
-                  <DetBadge det={phoneDet} />
+              <div className={`py-1.5 px-2 rounded border border-transparent ${highlightClass(phoneDet, phoneFused)}`}>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-gray-500 w-24">Phone</label>
+                  <div className="flex items-center flex-1">
+                    <input 
+                      type="tel" 
+                      value={pageData.phone || ''} 
+                      onChange={(e) => setPageData({...pageData, phone: e.target.value})}
+                      className="flex-1 text-sm text-gray-800 bg-transparent border-b border-gray-200 focus:border-indigo-400 focus:outline-none px-1 py-0.5"
+                    />
+                    <DetBadge det={phoneDet} />
+                  </div>
                 </div>
+                <PerceptionBadge fused={phoneFused} defaultSource="DOM + VISION" defaultType="PHONE" />
               </div>
 
               {/* Password */}
-              <div className={`flex items-center justify-between py-1.5 px-2 rounded ${highlightClass(passDet)}`}>
-                <label className="text-xs text-gray-500 w-24">Password</label>
-                <div className="flex items-center flex-1">
-                  <div className="flex-1 flex items-center border-b border-gray-200">
-                    <input 
-                      type={showPasswordText ? 'text' : 'password'} 
-                      value={pageData.password || ''} 
-                      onChange={(e) => setPageData({...pageData, password: e.target.value})}
-                      className="flex-1 text-sm text-gray-800 bg-transparent focus:outline-none px-1 py-0.5"
-                    />
-                    <button onClick={() => setShowPasswordText(!showPasswordText)} className="p-0.5 text-gray-400 hover:text-gray-600 cursor-pointer">
-                      {showPasswordText ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </button>
+              <div className={`py-1.5 px-2 rounded border border-transparent ${highlightClass(passDet, passFused)}`}>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-gray-500 w-24">Password</label>
+                  <div className="flex items-center flex-1">
+                    <div className="flex-1 flex items-center border-b border-gray-200">
+                      <input 
+                        type={showPasswordText ? 'text' : 'password'} 
+                        value={pageData.password || ''} 
+                        onChange={(e) => setPageData({...pageData, password: e.target.value})}
+                        className="flex-1 text-sm text-gray-800 bg-transparent focus:outline-none px-1 py-0.5"
+                      />
+                      <button onClick={() => setShowPasswordText(!showPasswordText)} className="p-0.5 text-gray-400 hover:text-gray-600 cursor-pointer">
+                        {showPasswordText ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <DetBadge det={passDet} />
                   </div>
-                  <DetBadge det={passDet} />
                 </div>
+                <PerceptionBadge fused={passFused} defaultSource="DOM + VISION" defaultType="PASSWORD" />
               </div>
 
               {/* API Key */}
-              <div className={`flex items-center justify-between py-1.5 px-2 rounded ${highlightClass(keyDet)}`}>
-                <label className="text-xs text-gray-500 w-24">API Key</label>
-                <div className="flex items-center flex-1">
-                  <div className="flex-1 flex items-center">
-                    <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-1 rounded border border-gray-200">
-                      {pageData.apiKey || ''}
-                    </span>
+              <div className={`py-1.5 px-2 rounded border border-transparent ${highlightClass(keyDet, keyFused)}`}>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-gray-500 w-24">API Key</label>
+                  <div className="flex items-center flex-1">
+                    <div className="flex-1 flex items-center">
+                      <span className="text-xs font-mono text-gray-600 bg-gray-100 px-2 py-1 rounded border border-gray-200">
+                        {pageData.apiKey || ''}
+                      </span>
+                    </div>
+                    <DetBadge det={keyDet} />
                   </div>
-                  <DetBadge det={keyDet} />
                 </div>
+                <PerceptionBadge fused={keyFused} defaultSource="DOM + VISION" defaultType="API_KEY" />
               </div>
             </div>
           </div>
 
           {/* Action Buttons Row */}
-          <div className="flex flex-wrap gap-3">
-            <button 
-              onClick={() => onSimulateUserAction('Login')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer flex items-center gap-2 ${
-                isExecutingLogin 
-                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
-              }`}
-            >
-              <KeyRound className="w-4 h-4" />
-              {isExecutingLogin ? '✓ Login Successful' : 'Login'}
-            </button>
+          <div>
+            <div className="flex flex-wrap gap-3">
+              <button 
+                onClick={() => onSimulateUserAction('Login')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer flex items-center gap-2 ${
+                  isExecutingLogin 
+                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
+              >
+                <KeyRound className="w-4 h-4" />
+                {isExecutingLogin ? '✓ Login Successful' : 'Login'}
+              </button>
 
-            <button 
-              onClick={() => onSimulateUserAction('Download Report')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors cursor-pointer flex items-center gap-2 ${
-                isExecutingDownload
-                  ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              <Download className="w-4 h-4" />
-              {isExecutingDownload ? '✓ Report Downloaded' : 'Download Report'}
-            </button>
+              <button 
+                onClick={() => onSimulateUserAction('Download Report')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors cursor-pointer flex items-center gap-2 ${
+                  isExecutingDownload
+                    ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <Download className="w-4 h-4" />
+                {isExecutingDownload ? '✓ Report Downloaded' : 'Download Report'}
+              </button>
 
-            <button 
-              onClick={() => onSimulateUserAction('View Report')}
-              className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-2"
-            >
-              <FileText className="w-4 h-4" />
-              View Report
-            </button>
+              <button 
+                onClick={() => onSimulateUserAction('View Report')}
+                className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                View Report
+              </button>
+            </div>
+
+            {showPerceptionOverlay && (
+              <div className="mt-2 flex items-center gap-2 text-[10px] font-mono text-gray-500">
+                <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Target Buttons Source: DOM + VISION
+                </span>
+                <span>Buttons classified as Task-Relevant Action Targets</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
