@@ -6,6 +6,18 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    open: true
+    open: false,
+    watch: {
+      ignored: [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/dist/**',
+        '**/SIH_DOC/**',
+        '**/*.docx'
+      ]
+    }
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'lucide-react']
   }
 })

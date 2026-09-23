@@ -1,18 +1,7 @@
 import React from 'react';
 import { 
-  ShieldCheck, 
-  ShieldAlert, 
-  Settings, 
-  FileText, 
-  Send, 
-  ArrowRightCircle, 
-  Lock, 
-  KeyRound, 
-  Check, 
-  AlertTriangle,
-  ExternalLink,
-  Shield,
-  Layers
+  Shield, ShieldOff, Settings, FileText, ChevronRight, 
+  Lock, AlertTriangle, Play, Zap
 } from 'lucide-react';
 
 export default function FirewallExtension({ 
@@ -22,151 +11,129 @@ export default function FirewallExtension({
   detections, 
   privacyMode, 
   setPrivacyMode, 
-  onOpenReport, 
   onOpenSettings, 
-  onOpenOutboundGate, 
-  onOpenComparison, 
   onTriggerAiTask, 
   onTestCrossTabAccess,
-  isAiRunning 
+  isAiRunning,
+  onClose
 }) {
+  // Dynamic counts from actual detector output
   const detectedCount = detections.length;
   const blockedCount = detections.filter(d => d.action === 'BLOCK').length;
   const redactedCount = detections.filter(d => d.action === 'REDACT').length;
-  const allowedCount = detections.filter(d => d.action === 'ALLOW').length;
 
   return (
-    <div className="bg-[#0f1422] border border-slate-800 rounded-xl p-4 shadow-md flex flex-col justify-between space-y-4">
+    <div className="w-72 bg-white rounded-lg border border-gray-200 shadow-xl overflow-hidden">
       {/* Header */}
-      <div>
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-          <div className="flex items-center space-x-2">
-            <span className="text-base font-bold text-white tracking-tight flex items-center gap-1.5">
-              🛡️ AI PRIVACY FIREWALL
-            </span>
+      <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-white" />
+            <span className="text-sm font-semibold text-white">AI Privacy Firewall</span>
           </div>
+          <button onClick={onClose} className="text-indigo-200 hover:text-white text-xs cursor-pointer">✕</button>
+        </div>
+        <div className="text-indigo-200 text-[11px] mt-0.5 truncate">
+          {activeTab.title.split('—')[0].trim()} — {activeTab.origin}
+        </div>
+      </div>
 
-          {/* Quick Toggle Switch */}
+      {/* Protection Toggle */}
+      <div className="px-4 py-3 border-b border-gray-100">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${isProtected ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+            <span className="text-sm font-medium text-gray-800">Protection</span>
+          </div>
           <button
             onClick={() => setIsProtected(!isProtected)}
-            className={`px-2 py-0.5 rounded text-xs font-mono font-semibold transition-colors cursor-pointer ${
-              isProtected ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300'
+            className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+              isProtected ? 'bg-emerald-500' : 'bg-gray-300'
             }`}
           >
-            {isProtected ? 'ON 🟢' : 'OFF ⚪'}
+            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+              isProtected ? 'left-[22px]' : 'left-0.5'
+            }`} />
           </button>
         </div>
+        {!isProtected && (
+          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-600 bg-amber-50 rounded px-2 py-1">
+            <AlertTriangle className="w-3 h-3 shrink-0" />
+            <span>Firewall disabled. Sensitive data may be exposed to remote AI.</span>
+          </div>
+        )}
+      </div>
 
-        {/* Tab Context Scope */}
-        <div className="mt-3 p-2 rounded bg-[#070a12] border border-slate-800 text-xs font-mono space-y-1">
-          <div className="flex items-center justify-between text-slate-400">
-            <span>Scoped Tab:</span>
-            <span className="text-emerald-400 font-bold">Tab #{activeTab.id}</span>
+      {/* Dynamic Detection Summary */}
+      <div className="px-4 py-3 border-b border-gray-100">
+        <div className="text-[11px] text-gray-500 mb-2">Locally Detected</div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="bg-gray-50 rounded p-1.5">
+            <div className="text-base font-semibold text-gray-800">{detectedCount}</div>
+            <div className="text-[10px] text-gray-500">Detected</div>
           </div>
-          <div className="flex items-center justify-between text-slate-400">
-            <span>Origin:</span>
-            <span className="text-slate-200 truncate max-w-[170px]">{activeTab.origin}</span>
+          <div className="bg-red-50 rounded p-1.5">
+            <div className="text-base font-semibold text-red-600">{blockedCount}</div>
+            <div className="text-[10px] text-red-500">Blocked</div>
           </div>
-          <div className="flex items-center justify-between text-slate-400">
-            <span>Isolation:</span>
-            <span className="text-blue-400">Strict Tab Scope</span>
+          <div className="bg-amber-50 rounded p-1.5">
+            <div className="text-base font-semibold text-amber-600">{redactedCount}</div>
+            <div className="text-[10px] text-amber-500">Sanitized</div>
           </div>
         </div>
 
-        {/* Privacy Mode Selector */}
-        <div className="mt-3">
-          <label className="text-[11px] font-mono text-slate-400 block mb-1">Privacy Mode:</label>
-          <div className="grid grid-cols-3 gap-1 text-xs font-mono">
-            {['BALANCED', 'STRICT', 'CUSTOM'].map(mode => (
-              <button
-                key={mode}
-                onClick={() => setPrivacyMode(mode)}
-                className={`py-1 rounded border text-[11px] cursor-pointer transition-colors ${
-                  privacyMode === mode 
-                    ? 'bg-slate-800 text-emerald-300 border-emerald-500 font-semibold' 
-                    : 'bg-[#070a12] text-slate-400 border-slate-800 hover:text-slate-200'
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Quick Tally Cards */}
-        <div className="grid grid-cols-3 gap-1.5 mt-3 text-center font-mono">
-          <div className="bg-[#070a12] p-1.5 rounded border border-slate-800">
-            <span className="text-[10px] text-slate-400 block">Detected</span>
-            <span className="text-sm font-bold text-white">{detectedCount}</span>
-          </div>
-          <div className="bg-[#070a12] p-1.5 rounded border border-red-900/40">
-            <span className="text-[10px] text-red-400 block">Blocked</span>
-            <span className="text-sm font-bold text-red-400">{isProtected ? blockedCount : 0}</span>
-          </div>
-          <div className="bg-[#070a12] p-1.5 rounded border border-orange-900/40">
-            <span className="text-[10px] text-orange-400 block">Redacted</span>
-            <span className="text-sm font-bold text-orange-400">{isProtected ? redactedCount : 0}</span>
-          </div>
-        </div>
-
-        {/* Detected Items Compact List */}
-        <div className="mt-3 space-y-1">
-          <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-            <span>Classified Items:</span>
-            <span>Policy Action</span>
-          </div>
-          <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+        {/* Per-detection breakdown */}
+        {detections.length > 0 && (
+          <div className="mt-2 space-y-1">
             {detections.map(det => (
-              <div key={det.id} className="p-1.5 bg-[#070a12] border border-slate-800 rounded flex items-center justify-between text-xs font-mono">
-                <span className="text-slate-300 truncate max-w-[130px]">{det.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
-                  det.action === 'BLOCK' ? 'bg-red-950 text-red-300 border border-red-800' : 'bg-orange-950 text-orange-300 border border-orange-800'
+              <div key={det.id} className="flex items-center justify-between text-[11px] py-0.5">
+                <span className="text-gray-600">{det.type}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                  det.action === 'BLOCK' ? 'bg-red-100 text-red-600' : 
+                  det.action === 'REDACT' ? 'bg-amber-100 text-amber-600' : 
+                  'bg-gray-100 text-gray-500'
                 }`}>
-                  {isProtected ? det.action : 'LEAKED'}
+                  {det.action === 'BLOCK' ? 'Blocked' : det.action === 'REDACT' ? 'Sanitized' : det.action}
                 </span>
               </div>
             ))}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Action Buttons */}
-      <div className="pt-2 border-t border-slate-800 space-y-1.5 font-mono text-xs">
-        {/* Outbound AI agent trigger */}
-        <button
+      {/* AI Task Actions */}
+      <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+        <div className="text-[11px] text-gray-500 mb-1">AI Agent Tasks</div>
+        <button 
           onClick={() => onTriggerAiTask("Find the Login button and log me in.")}
           disabled={isAiRunning}
-          className="w-full py-2 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold rounded flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm"
+          className="w-full py-2 px-3 bg-indigo-600 text-white rounded-md text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
         >
-          <ArrowRightCircle className="w-3.5 h-3.5" />
-          <span>{isAiRunning ? 'Agent Processing...' : 'Simulate Outbound AI Request'}</span>
+          {isAiRunning ? (
+            <><Zap className="w-3.5 h-3.5 animate-pulse" /> Processing...</>
+          ) : (
+            <><Play className="w-3.5 h-3.5" /> Ask AI to log me in</>
+          )}
         </button>
-
-        {/* Cross-Tab Attack Test Trigger (Requirement 5) */}
-        <button
-          onClick={onTestCrossTabAccess}
-          className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 rounded flex items-center justify-center space-x-1.5 cursor-pointer"
-          title="Simulate AI requesting Tab 14 data to verify cross-tab blocking"
+        <button 
+          onClick={() => onTriggerAiTask("Download the report.")}
+          disabled={isAiRunning}
+          className="w-full py-2 px-3 bg-white text-gray-700 border border-gray-300 rounded-md text-xs font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
         >
-          <AlertTriangle className="w-3.5 h-3.5" />
-          <span>Test Cross-Tab Access (Tab #14)</span>
+          <FileText className="w-3.5 h-3.5" /> Download Report
         </button>
+      </div>
 
-        {/* Quick Links */}
-        <div className="grid grid-cols-2 gap-1 pt-1">
-          <button
-            onClick={onOpenReport}
-            className="py-1 px-2 rounded bg-[#070a12] hover:bg-slate-800 text-slate-300 border border-slate-800 text-[11px] text-center"
-          >
-            Privacy Report →
-          </button>
-          <button
-            onClick={onOpenSettings}
-            className="py-1 px-2 rounded bg-[#070a12] hover:bg-slate-800 text-slate-300 border border-slate-800 text-[11px] text-center"
-          >
-            Settings & Policies →
-          </button>
-        </div>
+      {/* Navigation Links */}
+      <div className="px-4 py-2">
+        <button 
+          onClick={onOpenSettings}
+          className="w-full py-2 text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center justify-center gap-1 cursor-pointer"
+        >
+          <Settings className="w-3.5 h-3.5" />
+          Open Security Dashboard
+          <ChevronRight className="w-3 h-3" />
+        </button>
       </div>
     </div>
   );

@@ -1,14 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import TopNavbar from './components/TopNavbar.jsx';
 import SimulatedBrowser from './components/SimulatedBrowser.jsx';
 import FirewallExtension from './components/FirewallExtension.jsx';
-import SideBySideView from './components/SideBySideView.jsx';
-import OutboundGateModal from './components/OutboundGateModal.jsx';
-import PrivacyReport from './components/PrivacyReport.jsx';
-import SettingsView from './components/SettingsView.jsx';
-import EvaluationView from './components/EvaluationView.jsx';
-import PresentationMode from './components/PresentationMode.jsx';
-import ArchitectureFlow from './components/ArchitectureFlow.jsx';
+import SecurityDashboard from './pages/SecurityDashboard.jsx';
 
 import { scanPageContext } from './core/detector.js';
 import { sanitizeContext } from './core/sanitizer.js';
@@ -19,21 +12,22 @@ import { INITIAL_TABS, setActiveTabId } from './core/tabs.js';
 import { getPolicyForOrigin, PRIVACY_MODES } from './core/policies.js';
 
 export default function App() {
+  // ── View State ──
+  const [currentView, setCurrentView] = useState('browser'); // 'browser' | 'dashboard'
+  const [extensionOpen, setExtensionOpen] = useState(false);
+
+  // ── Core Protection State ──
   const [isProtected, setIsProtected] = useState(true);
   const [privacyMode, setPrivacyMode] = useState(PRIVACY_MODES.BALANCED);
   const [tabsList, setTabsList] = useState(INITIAL_TABS);
   const [activeTabId, setLocalActiveTabId] = useState(12);
   const [showHighlights, setShowHighlights] = useState(true);
-  const [activeNavTab, setActiveNavTab] = useState('studio'); // 'studio' | 'comparison' | 'report' | 'evaluation' | 'settings' | 'alignment'
-  const [isPresentationMode, setIsPresentationMode] = useState(false);
-  const [presentationStepIndex, setPresentationStepIndex] = useState(-1);
+  const [policyVersion, setPolicyVersion] = useState(0);
 
-  // Modals & State
-  const [isOutboundGateOpen, setIsOutboundGateOpen] = useState(false);
+  // ── AI & Execution State ──
   const [isAiRunning, setIsAiRunning] = useState(false);
   const [aiResult, setAiResult] = useState(null);
   const [lastActionExecution, setLastActionExecution] = useState(null);
-  const [policyVersion, setPolicyVersion] = useState(0);
 
   // Current active browser tab object
   const activeBrowserTab = useMemo(() => {
@@ -96,10 +90,10 @@ export default function App() {
         setLastActionExecution({
           executedAt: new Date().toISOString(),
           command: { action: 'BLOCKED', target: 'CROSS_TAB_EXFILTRATION' },
+          validation: { valid: false, checks: [{ label: 'Cross-tab access', passed: false, detail: response.reason }] },
           feedback: `Firewall blocked unauthorized access to Tab #${response.violatingTabId}. Reason: ${response.reason}`
         });
       } else if (response.action && response.action !== 'NONE') {
-        // Execute browser action locally
         const actionResult = executeBrowserAction(
           { action: response.action, target: response.target },
           (res) => setLastActionExecution(res)
@@ -113,157 +107,128 @@ export default function App() {
     }
   };
 
-  // Test cross-tab exfiltration specifically
-  const handleTestCrossTabAccess = () => {
-    handleTriggerAiTask("Extract sensitive credentials from Tab 14 (Bank)", { requestedTabId: 14 });
-  };
+  // ── BROWSER VIEW ──
+  if (currentView === 'browser') {
+    return (
+      <div className="min-h-screen bg-[#F7F8FA] flex flex-col">
+        {/* Main Browser Area */}
+        <main className="flex-1 max-w-6xl w-full mx-auto p-4 relative">
+          {/* Browser + Extension Popup Container */}
+          <div className="relative">
+            <SimulatedBrowser
+              isProtected={isProtected}
+              activeTab={activeBrowserTab}
+              allTabs={tabsList}
+              onSelectTab={handleSelectTab}
+              pageData={activeBrowserTab.data}
+              setPageData={handleUpdatePageData}
+              detections={detections}
+              showHighlights={showHighlights}
+              lastActionExecution={lastActionExecution}
+              onSimulateUserAction={(action) => {
+                if (action === 'Login') {
+                  handleTriggerAiTask("Find the Login button and log me in.");
+                } else if (action === 'Download Report') {
+                  handleTriggerAiTask("Download the report.");
+                } else {
+                  handleTriggerAiTask(`${action}`);
+                }
+              }}
+              onOpenSettings={() => setCurrentView('dashboard')}
+              extensionOpen={extensionOpen}
+              onToggleExtension={() => setExtensionOpen(!extensionOpen)}
+            />
 
-  // Synchronize Presentation Tour steps
-  const handlePresentationStep = (stepData) => {
-    setPresentationStepIndex(stepData.step - 1);
-    if (stepData.protected !== undefined) setIsProtected(stepData.protected);
-    if (stepData.highlights !== undefined) setShowHighlights(stepData.highlights);
-    if (stepData.view) setActiveNavTab(stepData.view);
-  };
+            {/* Extension Popup Overlay */}
+            {extensionOpen && (
+              <>
+                {/* Backdrop */}
+                <div className="fixed inset-0 z-30" onClick={() => setExtensionOpen(false)} />
+                {/* Popup positioned near extension icon */}
+                <div className="absolute right-12 top-12 z-40">
+                  <FirewallExtension
+                    isProtected={isProtected}
+                    setIsProtected={setIsProtected}
+                    activeTab={activeBrowserTab}
+                    detections={detections}
+                    privacyMode={privacyMode}
+                    setPrivacyMode={setPrivacyMode}
+                    onOpenSettings={() => { setExtensionOpen(false); setCurrentView('dashboard'); }}
+                    onTriggerAiTask={(task) => { setExtensionOpen(false); handleTriggerAiTask(task); }}
+                    onTestCrossTabAccess={() => {
+                      setExtensionOpen(false);
+                      handleTriggerAiTask("Extract sensitive credentials from Tab 14 (Bank)", { requestedTabId: 14 });
+                    }}
+                    isAiRunning={isAiRunning}
+                    onClose={() => setExtensionOpen(false)}
+                  />
+                </div>
+              </>
+            )}
+          </div>
 
-  return (
-    <div className="min-h-screen bg-[#080b12] text-slate-100 flex flex-col">
-      {/* Top Application Bar */}
-      <TopNavbar
-        isProtected={isProtected}
-        setIsProtected={setIsProtected}
-        activeTab={activeNavTab}
-        setActiveTab={setActiveNavTab}
-        isPresentationMode={isPresentationMode}
-        setIsPresentationMode={setIsPresentationMode}
-        activeBrowserTab={activeBrowserTab}
-        privacyMode={privacyMode}
-        onTriggerAiTask={handleTriggerAiTask}
-        isAiRunning={isAiRunning}
-      />
-
-      {/* Main Presentation Work Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-5 space-y-5">
-        {/* Tab 1: Interactive Browser & Agent Studio */}
-        {activeNavTab === 'studio' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            {/* Left: Simulated Multi-Tab Web Browser (Cols 8) */}
-            <div className="lg:col-span-8 min-h-[620px]">
-              <SimulatedBrowser
-                isProtected={isProtected}
-                activeTab={activeBrowserTab}
-                allTabs={tabsList}
-                onSelectTab={handleSelectTab}
-                pageData={activeBrowserTab.data}
-                setPageData={handleUpdatePageData}
-                detections={detections}
-                showHighlights={showHighlights}
-                lastActionExecution={lastActionExecution}
-                onSimulateUserAction={(action) => {
-                  setLastActionExecution({
-                    executedAt: new Date().toISOString(),
-                    command: { action: 'USER_CLICK', target: action },
-                    feedback: `User executed [${action}] locally on Tab #${activeBrowserTab.id} (${activeBrowserTab.origin}).`
-                  });
-                }}
-              />
+          {/* AI Task Action Bar (below browser) */}
+          <div className="mt-3 bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${isProtected ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+              <span className="text-xs text-gray-600">
+                AI Privacy Firewall {isProtected ? 'Active' : 'Disabled'} · {detections.length} element{detections.length !== 1 ? 's' : ''} detected
+              </span>
             </div>
-
-            {/* Right: AI Privacy Firewall Extension Docked Popup (Cols 4) */}
-            <div className="lg:col-span-4 sticky top-20">
-              <FirewallExtension
-                isProtected={isProtected}
-                setIsProtected={setIsProtected}
-                activeTab={activeBrowserTab}
-                detections={detections}
-                privacyMode={privacyMode}
-                setPrivacyMode={setPrivacyMode}
-                onOpenReport={() => setActiveNavTab('report')}
-                onOpenSettings={() => setActiveNavTab('settings')}
-                onOpenOutboundGate={() => setIsOutboundGateOpen(true)}
-                onOpenComparison={() => setActiveNavTab('comparison')}
-                onTriggerAiTask={handleTriggerAiTask}
-                onTestCrossTabAccess={handleTestCrossTabAccess}
-                isAiRunning={isAiRunning}
-              />
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => handleTriggerAiTask("Find the Login button and log me in.")}
+                disabled={isAiRunning}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {isAiRunning ? '⚡ Processing...' : '🤖 Ask AI to log me in'}
+              </button>
+              <button 
+                onClick={() => handleTriggerAiTask("Download the report.")}
+                disabled={isAiRunning}
+                className="px-3 py-1.5 bg-white text-gray-700 border border-gray-300 rounded-md text-xs font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                📥 Download Report
+              </button>
+              <button 
+                onClick={() => setCurrentView('dashboard')}
+                className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-md text-xs font-medium hover:bg-gray-200 transition-colors cursor-pointer"
+              >
+                ⚙️ Security Dashboard
+              </button>
             </div>
           </div>
-        )}
+        </main>
 
-        {/* Tab 2: Side-by-Side View (Original vs. Sanitized) */}
-        {activeNavTab === 'comparison' && (
-          <SideBySideView
-            pageData={activeBrowserTab.data}
-            isProtected={isProtected}
-            sanitizedPayload={sanitizedPayload}
-            activeTab={activeBrowserTab}
-          />
-        )}
+        {/* Footer */}
+        <footer className="border-t border-gray-200 bg-white py-2 text-center text-[11px] text-gray-400">
+          <div className="max-w-6xl mx-auto px-4 flex flex-wrap items-center justify-between gap-2">
+            <span>AI Privacy Firewall · SIH 2026</span>
+            <span className="text-gray-500">ISRO SIH26171 — On-Device Visual Perception for Lightweight Browser Agents</span>
+            <span>Privacy-Preserving Prototype</span>
+          </div>
+        </footer>
+      </div>
+    );
+  }
 
-        {/* Tab 3: Detailed Privacy Report */}
-        {activeNavTab === 'report' && (
-          <PrivacyReport
-            isProtected={isProtected}
-            detections={detections}
-            telemetry={telemetry}
-            activeTab={activeBrowserTab}
-          />
-        )}
-
-        {/* Tab 4: Detection Metrics & Evaluation Benchmark */}
-        {activeNavTab === 'evaluation' && (
-          <EvaluationView telemetry={telemetry} />
-        )}
-
-        {/* Tab 5: Settings & Website Policies */}
-        {activeNavTab === 'settings' && (
-          <SettingsView
-            isProtected={isProtected}
-            setIsProtected={setIsProtected}
-            privacyMode={privacyMode}
-            setPrivacyMode={setPrivacyMode}
-            activeTabOrigin={activeBrowserTab.origin}
-            onPolicyUpdated={() => setPolicyVersion(v => v + 1)}
-          />
-        )}
-
-        {/* Tab 6: Architecture & SIH26171 Alignment */}
-        {activeNavTab === 'alignment' && (
-          <ArchitectureFlow currentStepIndex={presentationStepIndex} />
-        )}
-      </main>
-
-      {/* Outbound Privacy Gate Modal */}
-      <OutboundGateModal
-        isOpen={isOutboundGateOpen}
-        onClose={() => setIsOutboundGateOpen(false)}
-        isProtected={isProtected}
-        activeTab={activeBrowserTab}
-        sanitizedPayload={sanitizedPayload}
-        onTriggerAiTask={handleTriggerAiTask}
-        aiResult={aiResult}
-        isAiRunning={isAiRunning}
-      />
-
-      {/* Automated 2-Minute Presentation Tour Overlay */}
-      <PresentationMode
-        isActive={isPresentationMode}
-        onClose={() => {
-          setIsPresentationMode(false);
-          setPresentationStepIndex(-1);
-        }}
-        onStepChange={handlePresentationStep}
-        onTriggerAiTask={handleTriggerAiTask}
-      />
-
-      {/* Footer Branding */}
-      <footer className="mt-auto border-t border-slate-900 bg-[#06080e] py-2.5 text-center text-xs text-slate-500 font-mono">
-        <div className="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-between gap-2">
-          <span>AI Privacy Firewall • SIH 2026</span>
-          <span className="text-slate-400">ISRO SIH26171 — Lightweight On-Device Browser Perception</span>
-          <span>Tab Process Isolation Simulated</span>
-        </div>
-      </footer>
-    </div>
+  // ── SECURITY DASHBOARD VIEW ──
+  return (
+    <SecurityDashboard
+      onBack={() => setCurrentView('browser')}
+      isProtected={isProtected}
+      setIsProtected={setIsProtected}
+      privacyMode={privacyMode}
+      setPrivacyMode={setPrivacyMode}
+      activeBrowserTab={activeBrowserTab}
+      detections={detections}
+      sanitizedPayload={sanitizedPayload}
+      telemetry={telemetry}
+      aiResult={aiResult}
+      lastActionExecution={lastActionExecution}
+      onTriggerAiTask={handleTriggerAiTask}
+      isAiRunning={isAiRunning}
+      onPolicyUpdated={() => setPolicyVersion(v => v + 1)}
+    />
   );
 }

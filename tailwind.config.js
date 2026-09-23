@@ -8,19 +8,22 @@ export default {
     extend: {
       colors: {
         privacy: {
-          dark: '#0B0F19',
-          card: '#111827',
-          border: '#1F2937',
+          bg: '#F7F8FA',
+          card: '#FFFFFF',
+          border: '#E5E7EB',
+          text: '#1E293B',
+          muted: '#64748B',
           emerald: '#10B981',
           shield: '#059669',
-          danger: '#EF4444',
-          warning: '#F59E0B',
-          accent: '#3B82F6'
+          danger: '#DC2626',
+          warning: '#D97706',
+          accent: '#2563EB',
+          indigo: '#4F46E5'
         }
       },
       fontFamily: {
-        mono: ['Fira Code', 'Courier New', 'monospace'],
-        sans: ['Inter', 'system-ui', 'sans-serif']
+        mono: ['Fira Code', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif']
       }
     },
   },
